@@ -21,8 +21,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Android SDK kur
-        uses: android-actions/setup-android@v3
+      # GitHub sunucusunda Android SDK hazır kurulu gelir; yalnızca gereken paketleri ekliyoruz.
+      - name: Android SDK paketlerini hazırla
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKM" ]; then SDKM="$(ls -d $ANDROID_HOME/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"; fi
+          echo "sdkmanager: $SDKM"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - name: Gradle kur
         uses: gradle/actions/setup-gradle@v4
@@ -39,13 +46,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NaturaMathematica-APK
-          path: NaturaMathematica.apk
+          path: |
+            NaturaMathematica.apk
+            tanitim-gorselleri/*.png
 
-      - name: APK'yı Sürümler (Releases) sayfasına yükle
+      - name: APK'yı ve görselleri Sürümler (Releases) sayfasına yükle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v1.0.${{ github.run_number }}"
-          gh release create "$TAG" NaturaMathematica.apk \
+          gh release create "$TAG" NaturaMathematica.apk tanitim-gorselleri/*.png \
             --title "Natura Mathematica $TAG" \
-            --notes "Natura Mathematica – Android telefon ve tablet için APK (Türkçe / English)."
+            --notes "Natura Mathematica – Android telefon ve tablet için APK (Türkçe / English). Tanıtım görselleri de ektedir."

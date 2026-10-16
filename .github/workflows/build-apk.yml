@@ -8,12 +8,36 @@ on:
 permissions:
   contents: write
 
+env:
+  PROJE: .
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Kodu al
         uses: actions/checkout@v4
+
+      # Depoda proje klasörleri düzgün duruyorsa onları kullanır.
+      # Yoksa depoya yüklenen zip dosyasını açar ve projeyi oradan derler.
+      - name: Proje dosyalarını bul
+        run: |
+          if [ -f settings.gradle ] && [ -f app/build.gradle ] && grep -q "com.android.application' version" build.gradle 2>/dev/null; then
+            echo "Proje klasör yapısı depoda doğru duruyor."
+          else
+            Z="$(ls -t *.zip 2>/dev/null | head -1 || true)"
+            if [ -z "$Z" ]; then
+              echo "::error::Proje bulunamadı. Depoya NaturaMathematica-Android-Projesi.zip dosyasını (açmadan) yükle."
+              exit 1
+            fi
+            echo "Zip dosyası açılıyor: $Z"
+            rm -rf _proje && mkdir _proje && unzip -q "$Z" -d _proje
+            S="$(find _proje -name settings.gradle -not -path '*/node_modules/*' | head -1)"
+            if [ -z "$S" ]; then echo "::error::Zip içinde settings.gradle bulunamadı."; exit 1; fi
+            D="$(dirname "$S")"
+            echo "Proje klasörü: $D"
+            echo "PROJE=$D" >> "$GITHUB_ENV"
+          fi
 
       - name: Java 17 kur
         uses: actions/setup-java@v4
@@ -24,7 +48,6 @@ jobs:
       # GitHub sunucusunda Android SDK hazır kurulu gelir; yalnızca gereken paketleri ekliyoruz.
       - name: Android SDK paketlerini hazırla
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
           SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           if [ ! -x "$SDKM" ]; then SDKM="$(ls -d $ANDROID_HOME/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"; fi
           echo "sdkmanager: $SDKM"
@@ -37,24 +60,27 @@ jobs:
           gradle-version: '8.9'
 
       - name: APK derle
+        working-directory: ${{ env.PROJE }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: APK dosyasını adlandır
-        run: cp app/build/outputs/apk/release/app-release.apk NaturaMathematica.apk
+      - name: APK ve görselleri topla
+        run: |
+          mkdir -p cikti
+          cp "$PROJE/app/build/outputs/apk/release/app-release.apk" cikti/NaturaMathematica.apk
+          cp "$PROJE"/tanitim-gorselleri/*.png cikti/ 2>/dev/null || true
+          ls -la cikti
 
       - name: APK'yı çalışma sonucuna ekle (Artifacts)
         uses: actions/upload-artifact@v4
         with:
           name: NaturaMathematica-APK
-          path: |
-            NaturaMathematica.apk
-            tanitim-gorselleri/*.png
+          path: cikti/*
 
       - name: APK'yı ve görselleri Sürümler (Releases) sayfasına yükle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v1.0.${{ github.run_number }}"
-          gh release create "$TAG" NaturaMathematica.apk tanitim-gorselleri/*.png \
+          gh release create "$TAG" cikti/* \
             --title "Natura Mathematica $TAG" \
             --notes "Natura Mathematica – Android telefon ve tablet için APK (Türkçe / English). Tanıtım görselleri de ektedir."

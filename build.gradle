@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Her GitHub derlemesinde sürüm numarası bir artar; böylece yeni APK eskisinin üzerine kurulabilir.
+def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+
+android {
+    namespace 'com.naturamathematica.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.naturamathematica.app"
+        minSdk 24
+        targetSdk 34
+        versionCode runNumber
+        versionName "1.0." + runNumber
+    }
+
+    signingConfigs {
+        // Sabit imza: güncellemeler eski sürümü silmeden kurulabilsin diye.
+        // Google Play'e yüklemeden önce kendi gizli anahtarını kullan (bkz. APK-KURULUM.md).
+        sabit {
+            storeFile file('natura-mathematica.p12')
+            storeType 'pkcs12'
+            storePassword 'natura2026'
+            keyAlias 'natura'
+            keyPassword 'natura2026'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.sabit
+        }
+        debug {
+            signingConfig signingConfigs.sabit
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
